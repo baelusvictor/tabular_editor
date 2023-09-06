@@ -1,0 +1,135 @@
+--------------------------------------------------------
+-- Calculated Column: 'dim_tijd'[1_monthindex_startpunt]
+--------------------------------------------------------
+COLUMN dim_tijd[1_monthindex_startpunt] =
+    VAR startpunt_input = DATE( [input_year], [input_month], 1 )
+    VAR mindex =
+        // de maand van het startpunt krijgt index 0, dan +1
+        // vooral geintereseerd in maanden met index 0,3,6,9,12... wanneer er een sprong van 3 maand wordt gemaakt
+        INT(
+            ( YEAR( dim_tijd[Date] ) - YEAR( startpunt_input ) ) * 12
+                + MONTH( dim_tijd[Date] )
+                - MONTH( startpunt_input )
+        )
+    RETURN
+        mindex
+    FormatString = "0"
+
+------------------------------------------
+-- Calculated Column: 'dim_tijd'[2_sprong]
+------------------------------------------
+COLUMN dim_tijd[2_sprong] =
+    VAR sprong = [input_interval]
+    VAR teller = ABS( dim_tijd[1_monthindex_startpunt] )
+    VAR noemer = sprong
+    VAR deling = DIVIDE( teller, noemer )
+    RETURN
+        IF(
+            deling = INT( deling ),
+            dim_tijd[1_monthindex_startpunt]
+        )
+    // je wil aanduiden wanneer je een sprong maakt, dus hoeveel maanden er tussen elke categorie zitten
+    // om te zien of je maandindex een veelvoud is van je sprong deel je deze, is er een kommagetal dan is het geen veelvoud, anders wel
+    FormatString = "0"
+
+-------------------------------------------------
+-- Calculated Column: 'dim_tijd'[3_running_total]
+-------------------------------------------------
+COLUMN dim_tijd[3_running_total] =
+    VAR datum = dim_tijd[Date]
+    RETURN
+        CALCULATE(
+            MAX( dim_tijd[2_sprong] ),
+            FILTER( ALL( dim_tijd ), dim_tijd[Date] <= datum )
+        )
+    // je wil ook aangeven tot welke periode de maanden behoren die géén veelvoud zijn van de sprong
+    // bovenstaande functie is een standaard running total, analoog aan hoe je een YTD berekend (al wordt die jaarlijks gereset en deze niet)
+    FormatString = "0"
+
+--------------------------------------------------------
+-- Calculated Column: 'dim_tijd'[3_running_total_blanks]
+--------------------------------------------------------
+COLUMN dim_tijd[3_running_total_blanks] =
+    IF(
+        ISBLANK( dim_tijd[3_running_total] ),
+        MIN( dim_tijd[3_running_total] ) - 1,
+        dim_tijd[3_running_total]
+    )
+    FormatString = "0"
+
+--------------------------------------------
+-- Calculated Column: 'dim_tijd'[4_benaming]
+--------------------------------------------
+COLUMN dim_tijd[4_benaming] =
+    VAR maxdate =
+        CALCULATE(
+            MAX( dim_tijd[Date] ),
+            ALLEXCEPT( dim_tijd, dim_tijd[3_running_total_blanks] )
+        )
+    VAR mindate =
+        CALCULATE(
+            MIN( dim_tijd[Date] ),
+            ALLEXCEPT( dim_tijd, dim_tijd[3_running_total_blanks] )
+        )
+    VAR maxdatef = FORMAT( maxdate, "dd/mm/yyyy" )
+    VAR mindatef = FORMAT( mindate, "dd/mm/yyyy" )
+    VAR string = "[" & mindatef & "-" & maxdatef & "]"
+    RETURN
+        string
+
+--------------------------------------------------
+-- Calculated Column: 'dim_tijd'[4_benaming_start]
+--------------------------------------------------
+COLUMN dim_tijd[4_benaming_start] =
+    VAR mindate =
+        CALCULATE(
+            MIN( dim_tijd[Date] ),
+            ALLEXCEPT( dim_tijd, dim_tijd[3_running_total] )
+        )
+    VAR minmmyy = FORMAT( mindate, "YY-MM" )
+    RETURN
+        minmmyy
+
+------------------------------------------------
+-- Calculated Column: 'dim_tijd'[5_benamingjaar]
+------------------------------------------------
+COLUMN dim_tijd[5_benamingjaar] =
+    VAR maxdate =
+        CALCULATE(
+            MAX( dim_tijd[Date] ),
+            ALLEXCEPT( dim_tijd, dim_tijd[3_running_total] )
+        )
+    VAR maxyear = YEAR( maxdate )
+    VAR test =
+        DATEVALUE(
+            FORMAT( dim_tijd[4_benaming_start] & "-01", "dd:mm:yyyy" )
+        )
+            + [input_interval] * 30
+    VAR maxyearall =
+        CALCULATE( MAX( dim_tijd[Date] ), ALL( dim_tijd ) )
+    RETURN
+        IF( test > maxyearall, maxyear + 1, maxyear )
+    DataType = STRING
+
+----------------------------------------
+-- Calculated Column: 'dim_tijd'[6_RANK]
+----------------------------------------
+COLUMN dim_tijd[6_RANK] =
+    RANKX(
+        FILTER(
+            dim_tijd,
+            dim_tijd[5_benamingjaar]
+                = EARLIER( dim_tijd[5_benamingjaar] )
+        // dit reset de ranking voor elk jaar, EARLIER is iets dat je enkel bij calculated columns gebruikt
+        ),
+        dim_tijd[3_running_total_blanks],
+        ,
+        ASC,
+        DENSE
+    )
+    FormatString = "0"
+
+-------------------------------------------
+-- Calculated Column: 'dim_tijd'[7_periode]
+-------------------------------------------
+COLUMN dim_tijd[7_periode] = dim_tijd[5_benamingjaar] & "-" & dim_tijd[6_RANK]

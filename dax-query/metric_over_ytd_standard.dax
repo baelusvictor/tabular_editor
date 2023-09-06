@@ -1,0 +1,21 @@
+DEFINE
+    VAR _year = TREATAS( { 2023 }, 'date'[Year] ) -- 2022/2023
+    VAR _soort = TREATAS( { "ytd" }, 'fct besteed'[filterytd] )
+    VAR _object = TREATAS( { "PO" }, object[objecttype] )
+    VAR _objectnummer = TREATAS( { "15275" }, object[object_id] ) -- 15275/40950
+    VAR _calc = TREATAS( { "MTD" }, YTDMTD[MTD/YTD] ) -- MTD/ YTD (cumulatief)
+    --VAR _calctest = TREATAS( { "Total" }, 'cg test'[3] ) -- YTD/YTG/total
+
+
+EVALUATE
+SUMMARIZECOLUMNS(
+    'date'[yyyy-mm],
+    _year,
+    _soort,
+    _object,
+    --_objectnummer,
+    --_calctest,
+    "A KP", FORMAT( [Actuals basic], "#,0" ),
+    "B KP", FORMAT( [B MTD], "#,0" )
+)
+ORDER BY 'date'[yyyy-mm]

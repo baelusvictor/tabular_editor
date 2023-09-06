@@ -1,0 +1,634 @@
+-----------------------------------
+-- Calculated Table: 'Key Measures'
+-----------------------------------
+TABLE 'Key Measures' = Row("Column", BLANK())
+
+---------------------
+-- Measure: [Actuals]
+---------------------
+MEASURE 'Key Measures'[Actuals] = 
+    // Het tweede argument is nodig omdat sommige boekingen nog niet volledig afgesloten zijn
+    // Periode YTD bevat enkel de actuals die zeker afgesloten zijn...
+    CALCULATE( SUM( actuals[bedrag] ), actuals[now?] = "ytd" )
+    DisplayFolder = "Actuals;Combi\Aytd_Btot;Combi\Aytd_Bytd"
+    FormatString = "#,0"
+
+-------------------
+-- Measure: [A YTD]
+-------------------
+MEASURE 'Key Measures'[A YTD] = 
+    // Omdat er gewerkt wordt met een datumtabel om granualiteit YYYYMM kan je helaas niet met de standaard time intel functies werken
+    // Dit zijn de uitgeschreven versies, dus zonder de "syntax sugar" dateytd
+    VAR LastMonthAvailable = MAX( 'date'[Year Month Number] )
+    VAR LastYearAvailable = MAX( 'date'[Year] )
+    VAR Result =
+        CALCULATE(
+            [Actuals],
+            REMOVEFILTERS( 'date' ),
+            'date'[Year Month Number] <= LastMonthAvailable,
+            'date'[Year] = LastYearAvailable
+        )
+    VAR ResultVisibleMonth =
+        IF( SELECTEDVALUE( 'date'[ytd?] ) = "YTD", Result )
+    RETURN
+        ResultVisibleMonth
+    DisplayFolder = "Actuals"
+    FormatString = "#,##0"
+
+------------------
+-- Measure: [A PY]
+------------------
+MEASURE 'Key Measures'[A PY] = 
+    // Omwille van de structuur tijdstabel niet mogelijk om met dateadd te werken
+    VAR CurrentYearNumber = SELECTEDVALUE ( 'Date'[Year] )
+    VAR PreviousYearNumber = CurrentYearNumber - 1
+    VAR Result =
+        CALCULATE (
+            [Actuals],
+            REMOVEFILTERS ( 'Date' ),
+            'Date'[Year] = PreviousYearNumber
+        )
+    RETURN
+        Result
+    DisplayFolder = "Actuals"
+    FormatString = "#,0"
+
+---------------
+-- Measure: [|]
+---------------
+MEASURE 'Key Measures'[|] = BLANK() //UNICHAR(127)
+    DisplayFolder = "Varia"
+    FormatString = "0"
+
+-----------------------
+-- Measure: [A ALLyear]
+-----------------------
+MEASURE 'Key Measures'[A ALLyear] = CALCULATE( [Actuals], ALLEXCEPT( 'date', 'date'[Year] ) )
+    DisplayFolder = "Actuals"
+
+----------------------------
+-- Measure: [B rest maxyear]
+----------------------------
+MEASURE 'Key Measures'[B rest maxyear] = 
+    CALCULATE(
+        [B allyear] - [A ALLyear],
+        FILTER( ALL( 'date' ), 'date'[jaarindex] = 0 )
+    )
+    DisplayFolder = "Budget vs Actuals"
+    FormatString = "#,0"
+
+---------------
+-- Measure: [B]
+---------------
+MEASURE 'Key Measures'[B] = 
+    // Dit is na de A YTG de meest complexe measure
+    // Reden: versie budget
+    // Als je niets selecteerd, wil je automatisch de meest recente versie. Als je wel iets selecteerd, dan pak je de selectie.
+    VAR maxversion = [B versie max]
+        // Samen te bekijken
+    VAR budget_standaard = SUM( budget[budget] )
+    VAR budget_calc =
+        CALCULATE(
+            SUM( budget[budget] ),
+            'budget'[versie] = maxversion 
+        )
+    VAR if_versie =
+        IF(
+            NOT ISBLANK( SELECTEDVALUE( 'budget versie'[versie] ) ),
+            budget_standaard,
+            budget_calc
+        )
+    VAR scoop =
+        // Budgetten zijn niet correct verdeeld per kostensoort, de totalen wel maar hun onderlinge verdeling niet
+        // Je wil dus enkel de subtotalen zien, niet de verdeling per kostensoort van budgetten
+        IF(
+            ISINSCOPE( soort[soort+omschrijving] ),
+            BLANK( ),
+            if_versie
+        )
+    RETURN
+        scoop
+    DisplayFolder = "Budget;Combi\A_B;Combi\Aytd_Btot"
+    FormatString = "#,##0"
+
+-------------------
+-- Measure: [A YTG]
+-------------------
+MEASURE 'Key Measures'[A YTG] = [B ALLyear] - [A YTD last]
+    DisplayFolder = "Budget vs Actuals"
+    FormatString = "#,0"
+
+----------------------
+-- Measure: [A PY YTD]
+----------------------
+MEASURE 'Key Measures'[A PY YTD] = 
+    VAR LastMonthAvailable = MAX ( 'Date'[Year Month Number] )
+    VAR LastYearAvailable = MAX ( 'Date'[Year] )
+    VAR Result =
+        CALCULATE (
+            [A PY],
+            REMOVEFILTERS ( 'Date' ),
+            'Date'[Year Month Number] <= LastMonthAvailable,
+            'Date'[Year] = LastYearAvailable
+        )
+    VAR ResultVisibleMonth =
+    
+    IF(SELECTEDVALUE('date'[ytd?])="YTD",Result)
+    
+    RETURN
+        ResultVisibleMonth
+    DisplayFolder = "Actuals"
+    FormatString = "#,0"
+
+-----------------------
+-- Measure: [A vs A LY]
+-----------------------
+MEASURE 'Key Measures'[A vs A LY] = [Actuals]-[A PY]
+    DisplayFolder = "Budget vs Actuals"
+
+--------------------
+-- Measure: [A vs B]
+--------------------
+MEASURE 'Key Measures'[A vs B] = 
+    IF(
+        ISINSCOPE( soort[soort+omschrijving] ),
+        BLANK( ),
+        [Actuals] - [B]
+    )
+    DisplayFolder = "Budget vs Actuals;Combi\Aytd_Btot"
+    FormatString = "#,##0"
+
+-----------------------------
+-- Measure: [A vs B YTD last]
+-----------------------------
+MEASURE 'Key Measures'[A vs B YTD last] = 
+    IF(
+        ISINSCOPE( soort[soort+omschrijving] ),
+        BLANK( ),
+        [A ytd] - [B ytd last]
+    )*-1
+    DisplayFolder = "Budget vs Actuals"
+    FormatString = "#,0"
+
+--------------------------
+-- Measure: [blank_column]
+--------------------------
+MEASURE 'Key Measures'[blank_column] = blank()
+    DisplayFolder = "Varia"
+    FormatString = "0"
+    Visible = FALSE
+
+-------------------
+-- Measure: [A ABS]
+-------------------
+MEASURE 'Key Measures'[A ABS] = ABS( [Actuals] )
+    DisplayFolder = "Actuals"
+
+---------------
+-- Measure: [0]
+---------------
+MEASURE 'Key Measures'[0] = 0
+    DisplayFolder = "Varia"
+
+-------------------------
+-- Measure: [B YTD reset]
+-------------------------
+MEASURE 'Key Measures'[B YTD reset] = 
+    // de standaard YTD reset elk jaar, deze measure reset bij overgang YTD/YTG
+    VAR LastMonthAvailable = MAX ( 'Date'[Year Month Number] )
+    VAR LastYearAvailable = MAX ( 'Date'[Year] )
+    VAR act = SELECTEDVALUE( 'date'[ytd?] ) 
+    VAR Result =
+        CALCULATE (
+            [B],
+            REMOVEFILTERS ( 'Date' ),
+            'Date'[Year Month Number] <= LastMonthAvailable,
+            'Date'[Year] = LastYearAvailable,
+            'date'[ytd?] = act
+        )
+    RETURN
+        Result
+    DisplayFolder = "Budget"
+    FormatString = "#,##0"
+
+-------------------
+-- Measure: [B YTD]
+-------------------
+MEASURE 'Key Measures'[B YTD] = 
+    // Omdat er gewerkt wordt met een datumtabel om granualiteit YYYYMM kan je helaas niet met de standaard time intel functies werken
+    // Dit zijn de uitgeschreven versies, dus zonder de "syntax sugar" dateytd
+    VAR LastMonthAvailable = MAX ( 'Date'[Year Month Number] )
+    VAR LastYearAvailable = MAX ( 'Date'[Year] )
+    VAR Result =
+        CALCULATE (
+            [B],
+            REMOVEFILTERS ( 'Date' ),
+            'Date'[Year Month Number] <= LastMonthAvailable,
+            'Date'[Year] = LastYearAvailable
+        )
+    RETURN
+        Result
+    DisplayFolder = "Budget"
+    FormatString = "#,##0"
+
+-----------------------------
+-- Measure: [A left to spend]
+-----------------------------
+MEASURE 'Key Measures'[A left to spend] = 
+    // Dit is de moeilijkste measure in het model, al is eigenljk enkel de VAR allocation factor geavanceerd
+    // Hier wordt berekend hoeveel actuals er nog gaan uitgegeven worden, in de veronderstelling dat het volledige budget wordt opgebruikt.
+    // De A YTG = B YTG, maar dan aangepast met een factor
+    // Indien de actuals achterlopen, dan is deze factor > 1; lopen de actuals voor, dan is deze factor < 1
+    // Deze factor blijft constant doorheen de toekomst
+    VAR LastAvailableDate =
+        CALCULATE(
+            MAX( actuals[yyyymm] ),
+            REMOVEFILTERS( 'date' ),
+            'date'[ytd?] = "YTD"
+        )
+    VAR CurrentYear = SELECTEDVALUE( 'date'[Year] )
+    VAR CurrentActuals =
+        CALCULATE(
+            [A YTD],
+            FILTER( ALL( 'date' ), 'date'[ytd?] = "YTD" )
+        )
+    VAR CurrentBudget =
+        CALCULATE(
+            [B YTD],
+            FILTER( ALL( 'date' ), 'date'[ytd?] = "YTD" )
+        )
+    VAR BudgetMax = [B allyear]
+    VAR AdjustmentFactor =
+        CALCULATE(
+            DIVIDE(
+                BudgetMax - CurrentActuals,
+                BudgetMax - CurrentBudget
+            ),
+            'date'[yyyy-mm] <= LastAvailableDate,
+            'date'[Year] = CurrentYear
+        )
+    VAR Act = [A YTD]
+    VAR ForecastedAmount =
+        CALCULATE(
+            [B] * AdjustmentFactor,
+            KEEPFILTERS( 'date'[yyyy-mm] > LastAvailableDate )
+        )
+    VAR Result = Act + ForecastedAmount
+    // wordt hier niet gebruikt, dit is voornamelijk voor de grafieken
+    RETURN
+        ForecastedAmount
+    DisplayFolder = "Actuals"
+    FormatString = "#,0"
+
+-----------------------
+-- Measure: [B allyear]
+-----------------------
+MEASURE 'Key Measures'[B allyear] = 
+    CALCULATE(
+        [B],
+        REMOVEFILTERS( 'date' ),
+        VALUES( 'date'[Year] )
+    )
+    DisplayFolder = "Budget"
+    FormatString = "#,##0"
+
+-------------------------------------------
+-- Measure: [A left to spend YTD graphline]
+-------------------------------------------
+MEASURE 'Key Measures'[A left to spend YTD graphline] = 
+    // Specifiek voor grafiek
+    VAR LastMonthAvailable = MAX( 'date'[Year Month Number] )
+    VAR LastYearAvailable = MAX( 'date'[Year] )
+    VAR CurrentActuals =
+        CALCULATE(
+            [A YTD],
+            FILTER( ALL( 'date' ), 'date'[ytd?] = "YTD" )
+        )
+    VAR Result =
+        CALCULATE(
+            [A left to spend],
+            REMOVEFILTERS( 'date' ),
+            'date'[Year Month Number] <= LastMonthAvailable,
+            'date'[Year] = LastYearAvailable
+        )
+            + CurrentActuals
+    VAR ResultVisibleMonth =
+        IF( MAX( 'date'[maandindex] ) > -2, Result )
+    RETURN
+        ResultVisibleMonth
+    DisplayFolder = "Actuals"
+    FormatString = "#,0"
+
+---------------------
+-- Measure: [A combi]
+---------------------
+MEASURE 'Key Measures'[A combi] = 
+    // Opgepast met selectedvalue, dit werkt enkel indien er slechts één filter is geselecteerd
+    // Omdat een datum ofwel YTD ofwel YTG is (nooit beide, nooit geen enkele) is dit hier geen probleem
+    IF(
+        SELECTEDVALUE( 'date'[ytd?] ) = "YTD",
+        [Actuals],
+        IF(
+            SELECTEDVALUE( 'date'[ytd?] ) = "YTG",
+            [A left to spend]
+        )
+    )
+    DisplayFolder = "Actuals;Combi\A_B"
+    FormatString = "#,0"
+
+--------------------------
+-- Measure: [A vs B combi]
+--------------------------
+MEASURE 'Key Measures'[A vs B combi] = 
+    IF(
+        ISINSCOPE( soort[soort+omschrijving] ),
+        BLANK( ),
+        [A combi] - [B]
+    )
+        * -1
+    DisplayFolder = "Budget vs Actuals;Combi\A_B"
+    FormatString = "#,##0"
+
+-------------------------
+-- Measure: [A YTD combi]
+-------------------------
+MEASURE 'Key Measures'[A YTD combi] = 
+    // Opgepast met selectedvalue, dit werkt enkel indien er slechts één filter is geselecteerd
+    // Omdat een datum ofwel YTD ofwel YTG is (nooit beide, nooit geen enkele) is dit hier geen probleem
+    IF(
+        SELECTEDVALUE( 'date'[ytd?] ) = "YTD",
+        [A YTD],
+        IF(
+            SELECTEDVALUE( 'date'[ytd?] ) = "YTG",
+            [A left to spend YTD graphline]
+        )
+    )
+    DisplayFolder = "Actuals"
+    FormatString = "#,##0"
+
+------------------------------
+-- Measure: [A vs B YTD combi]
+------------------------------
+MEASURE 'Key Measures'[A vs B YTD combi] = ( [A YTD combi] - [B YTD] ) * -1
+    DisplayFolder = "Budget vs Actuals"
+    FormatString = "#,0"
+
+---------------------------------
+-- Measure: [A left to spend YTD]
+---------------------------------
+MEASURE 'Key Measures'[A left to spend YTD] = 
+    // Omdat er gewerkt wordt met een datumtabel om granualiteit YYYYMM kan je helaas niet met de standaard time intel functies werken
+    // Dit zijn de uitgeschreven versies, dus zonder de "syntax sugar" dateytd
+    VAR LastMonthAvailable = MAX( 'date'[Year Month Number] )
+    VAR LastYearAvailable = MAX( 'date'[Year] )
+    VAR CurrentActuals =
+        CALCULATE(
+            [A YTD],
+            FILTER( ALL( 'date' ), 'date'[ytd?] = "YTD" )
+        )
+    VAR Result =
+        CALCULATE(
+            [A left to spend],
+            REMOVEFILTERS( 'date' ),
+            'date'[Year Month Number] <= LastMonthAvailable,
+            'date'[Year] = LastYearAvailable
+        )
+            + CurrentActuals
+    VAR ResultVisibleMonth =
+        // specifiek voor de grafiek, anders werkt het niet
+        IF( MAX( 'date'[maandindex] ) > -2, Result )
+    RETURN
+        Result
+    DisplayFolder = "Actuals"
+    FormatString = "#,0"
+
+------------------------
+-- Measure: [A YTD last]
+------------------------
+MEASURE 'Key Measures'[A YTD last] = 
+    // De maximum date van de A YTD. Komt voor in de key metrics.
+    // Dit zijn de actuals YTD tot nu toe (tot en met de afgesloten periode dus)
+    CALCULATE(
+        [A YTD],
+        FILTER( ALL( 'date' ), 'date'[ytd?] = "YTD" )
+    )
+    DisplayFolder = "Actuals"
+    FormatString = "#,0"
+
+------------------------
+-- Measure: [B YTD last]
+------------------------
+MEASURE 'Key Measures'[B YTD last] = 
+    // De maximum date van de B YTD. Komt voor in de key metrics.
+    // Dit zijn de budget YTD tot nu toe (tot en met de afgesloten periode dus)
+    CALCULATE(
+        [B YTD],
+        FILTER( ALL( 'date' ), 'date'[ytd?] = "YTD" )
+    )
+    DisplayFolder = "Budget;Combi\Aytd_Bytd"
+    FormatString = "#,##0"
+
+-----------------
+-- Measure: [0nu]
+-----------------
+MEASURE 'Key Measures'[0nu] = IF( MAX( 'date'[maandindex] ) = -1, 0 )
+    DisplayFolder = "Varia"
+    FormatString = "0"
+
+-----------------------------------
+-- Measure: [A vs B YTD combi last]
+-----------------------------------
+MEASURE 'Key Measures'[A vs B YTD combi last] = 
+    IF(
+        ISINSCOPE( soort[soort+omschrijving] ),
+        BLANK( ),
+        ( [A YTD last] - [B YTD last] )
+    )
+    DisplayFolder = "Budget vs Actuals;Combi\Aytd_Bytd"
+    FormatString = "#,0"
+
+-----------------------
+-- Measure: [A/B combi]
+-----------------------
+MEASURE 'Key Measures'[A/B combi] = 
+    IF(
+        ISINSCOPE( soort[soort+omschrijving] ),
+        BLANK( ),
+        DIVIDE( [A combi], [B], 0 )
+    )
+    DisplayFolder = "Budget vs Actuals;Combi\A_B"
+    FormatString = "#,##0 %"
+
+---------------------------
+-- Measure: [A/B YTD combi]
+---------------------------
+MEASURE 'Key Measures'[A/B YTD combi] = DIVIDE( [A ytd combi], [B ytd], 0 )
+    DisplayFolder = "Budget vs Actuals"
+    FormatString = "#,##0 %"
+
+--------------------
+-- Measure: [ifytg?]
+--------------------
+MEASURE 'Key Measures'[ifytg?] = IF( SELECTEDVALUE( 'date'[ytd?] ) = "YTG", 1 )
+    DisplayFolder = "Varia"
+
+-----------------
+-- Measure: [A/B]
+-----------------
+MEASURE 'Key Measures'[A/B] = 
+    IF(
+        ISINSCOPE( soort[soort+omschrijving] ),
+        BLANK( ),
+        DIVIDE( [Actuals], [B] )
+    )
+    DisplayFolder = "Budget vs Actuals;Combi\Aytd_Btot"
+    FormatString = "0%;-0%;0%"
+
+--------------------------
+-- Measure: [yearselected]
+--------------------------
+MEASURE 'Key Measures'[yearselected] = SELECTEDVALUE('date'[Year])
+    DisplayFolder = "Varia"
+    FormatString = "0"
+
+----------------------------
+-- Measure: [versieselected]
+----------------------------
+MEASURE 'Key Measures'[versieselected] = SELECTEDVALUE('budget versie'[versie])
+    DisplayFolder = "Varia"
+    FormatString = "0"
+
+--------------------------
+-- Measure: [aardselected]
+--------------------------
+MEASURE 'Key Measures'[aardselected] = SELECTEDVALUE( plaats[aard] )
+    DisplayFolder = "Varia"
+    FormatString = "0"
+
+-------------------------
+-- Measure: [last import]
+-------------------------
+MEASURE 'Key Measures'[last import] = max(importdate[import_date])
+    DisplayFolder = "Varia"
+    FormatString = "Short Date"
+
+--------------------------------
+-- Measure: [closing period ytd]
+--------------------------------
+MEASURE 'Key Measures'[closing period ytd] = max(importdate[yyyymm_ytd_min1])
+    DisplayFolder = "Varia"
+
+------------------------------
+-- Measure: [closed period CF]
+------------------------------
+MEASURE 'Key Measures'[closed period CF] = 
+    VAR maxperiod = max(importdate[yyyymm_ytd_min1])
+    VAR calc = if(SELECTEDVALUE('date'[yyyy-mm])=maxperiod,1)
+    RETURN
+    calc
+    DisplayFolder = "Varia"
+    FormatString = "0"
+
+---------------------------
+-- Measure: [bar charts CF]
+---------------------------
+MEASURE 'Key Measures'[bar charts CF] = 
+    IF(
+        ISINSCOPE('date'[Month]),
+        "RGBA(0,0,0,0)"
+    )
+    DisplayFolder = "Varia"
+
+--------------------------
+-- Measure: [B versie max]
+--------------------------
+MEASURE 'Key Measures'[B versie max] = 
+    // zet eerst alle filters af, vervolgens herstel je enkel de filters op een bepaald niveau
+    // dit niveau is per plaats, soort, en jaar
+    // hier wil je de maximum versie van
+    
+    VAR KP = VALUES( plaats[plaats_id] )
+    VAR KS = VALUES( soort[soort_id] )
+    VAR Jaar = VALUES( 'date'[Year] )
+    VAR MaxVersie = MAX( budget[versie] )
+    VAR MaxVersieAtGrain =
+        CALCULATE(
+            MaxVersie,
+            REMOVEFILTERS( plaats ),
+            REMOVEFILTERS( soort ),
+            REMOVEFILTERS( 'date' ),
+            KP,
+            KS,
+            Jaar
+        )
+    RETURN
+        MaxVersieAtGrain
+    DisplayFolder = "Budget"
+
+--------------------------
+-- Measure: [A/B YTD last]
+--------------------------
+MEASURE 'Key Measures'[A/B YTD last] = 
+    IF(
+        ISINSCOPE( soort[soort+omschrijving] ),
+        BLANK( ),
+        DIVIDE( [Actuals], [B YTD last], 0 )
+    )
+    DisplayFolder = "Budget vs Actuals;Combi\Aytd_Bytd"
+    FormatString = "#,##0 %"
+
+-----------------------
+-- Measure: [B noscoop]
+-----------------------
+MEASURE 'Key Measures'[B noscoop] = 
+    VAR maxversion = [B versie max]
+    VAR budget_standaard = SUM( budget[budget] )
+    VAR budget_calc =
+        CALCULATE(
+            SUM( budget[budget] ),
+            'budget'[versie] = maxversion 
+        )
+    VAR if_versie =
+        IF(
+            NOT ISBLANK( SELECTEDVALUE( 'budget versie'[versie] ) ),
+            budget_standaard,
+            budget_calc
+        )
+    VAR scoop =
+        IF(
+            ISINSCOPE( soort[soort+omschrijving] ),
+            BLANK( ),
+            if_versie
+        )
+    RETURN
+        if_versie
+    DisplayFolder = "Budget"
+
+-----------------------------
+-- Measure: [A/B YTD last CF]
+-----------------------------
+MEASURE 'Key Measures'[A/B YTD last CF] = 
+    IF(
+        ISBLANK( [Actuals] ) || ISBLANK( [B YTD last] ),
+        1,
+        IF(
+            ISINSCOPE( soort[soort+omschrijving] ),
+            BLANK( ),
+            DIVIDE( [Actuals], [B YTD last], 1 )
+        )
+    )
+    DisplayFolder = "Budget vs Actuals"
+    FormatString = "#,##0 %"
+
+------------------------
+-- Measure: [B #records]
+------------------------
+MEASURE 'Key Measures'[B #records] = COUNTROWS( budget )
+    DisplayFolder = "Budget"
+    FormatString = "#,##0"
+
+--------------------------
+-- Measure: [#transacties]
+--------------------------
+MEASURE 'Key Measures'[#transacties] = COUNTROWS( budget )
+    DisplayFolder = "Actuals"

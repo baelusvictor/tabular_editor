@@ -1,0 +1,396 @@
+{
+  "name": "moving_range_time",
+  "compatibilityLevel": 1550,
+  "model": {
+    "culture": "en-US",
+    "tables": [
+      {
+        "name": "dim_tijd",
+        "lineageTag": "9bd3c4c9-69fe-4b79-a9ba-788d860d08a0",
+        "dataCategory": "Time",
+        "columns": [
+          {
+            "type": "calculatedTableColumn",
+            "name": "Date",
+            "dataType": "dateTime",
+            "isNameInferred": true,
+            "isDataTypeInferred": true,
+            "isKey": true,
+            "sourceColumn": "[Date]",
+            "formatString": "Short Date",
+            "lineageTag": "41654526-6be6-4bb8-85d2-39410578be9a",
+            "summarizeBy": "none",
+            "annotations": [
+              {
+                "name": "SummarizationSetBy",
+                "value": "Automatic"
+              },
+              {
+                "name": "PBI_ChangedProperties",
+                "value": "[\"FormatString\"]"
+              }
+            ]
+          },
+          {
+            "type": "calculated",
+            "name": "monthindex_today",
+            "dataType": "int64",
+            "isDataTypeInferred": true,
+            "expression": [
+              "",
+              "INT (",
+              "    ( YEAR ( [Date] ) - YEAR ( TODAY () ) ) * 12",
+              "        + MONTH ( [Date] )",
+              "        - MONTH ( TODAY () )",
+              ")"
+            ],
+            "formatString": "0",
+            "lineageTag": "e5fbb895-a653-47eb-8c9d-137b3bb1f899",
+            "summarizeBy": "sum",
+            "annotations": [
+              {
+                "name": "SummarizationSetBy",
+                "value": "Automatic"
+              }
+            ]
+          },
+          {
+            "type": "calculated",
+            "name": "1_monthindex_startpunt",
+            "dataType": "int64",
+            "isDataTypeInferred": true,
+            "expression": [
+              "",
+              "VAR startpunt_input = ",
+              "    DATE ( dim_tijd[input_year], dim_tijd[input_month], 1)",
+              "VAR mindex =",
+              "    // de maand van het startpunt krijgt index 0, dan +1",
+              "    // vooral geintereseerd in maanden met index 0,3,6,9,12... wanneer er een sprong van 3 maand wordt gemaakt",
+              "    INT (",
+              "        ( YEAR ( [Date] ) - YEAR ( startpunt_input ) ) * 12",
+              "            + MONTH ( [Date] )",
+              "            - MONTH ( startpunt_input )",
+              "    )",
+              "RETURN",
+              "    mindex"
+            ],
+            "formatString": "0",
+            "lineageTag": "e9f35497-8fae-4922-9946-316ba68e3616",
+            "summarizeBy": "sum",
+            "annotations": [
+              {
+                "name": "SummarizationSetBy",
+                "value": "Automatic"
+              }
+            ]
+          },
+          {
+            "type": "calculated",
+            "name": "2_sprong",
+            "dataType": "int64",
+            "isDataTypeInferred": true,
+            "expression": [
+              "",
+              "VAR sprong = dim_tijd[input_interval]",
+              "VAR teller =",
+              "    ABS ( dim_tijd[1_monthindex_startpunt] )",
+              "VAR noemer = sprong",
+              "VAR deling =",
+              "    DIVIDE ( teller, noemer )",
+              "RETURN",
+              "    IF ( deling = INT ( deling ), dim_tijd[1_monthindex_startpunt] )",
+              "    // je wil aanduiden wanneer je een sprong maakt, dus hoeveel maanden er tussen elke categorie zitten",
+              "    // om te zien of je maandindex een veelvoud is van je sprong deel je deze, is er een kommagetal dan is het geen veelvoud, anders wel"
+            ],
+            "formatString": "0",
+            "lineageTag": "b6c664e1-4437-4f1d-bac2-551b7b47b59f",
+            "summarizeBy": "sum",
+            "annotations": [
+              {
+                "name": "SummarizationSetBy",
+                "value": "Automatic"
+              }
+            ]
+          },
+          {
+            "type": "calculated",
+            "name": "3_running_total",
+            "dataType": "int64",
+            "isDataTypeInferred": true,
+            "expression": [
+              "",
+              "VAR datum = dim_tijd[Date]",
+              "RETURN",
+              "    CALCULATE (",
+              "        MAX ( dim_tijd[2_sprong] ),",
+              "        FILTER ( ALL ( dim_tijd ), dim_tijd[Date] <= datum )",
+              "    )",
+              "    // je wil ook aangeven tot welke periode de maanden behoren die géén veelvoud zijn van de sprong",
+              "    // bovenstaande functie is een standaard running total, analoog aan hoe je een YTD berekend (al wordt die jaarlijks gereset en deze niet)"
+            ],
+            "formatString": "0",
+            "lineageTag": "68d48790-9e60-4f26-8bf1-2d497d08f0df",
+            "summarizeBy": "sum",
+            "annotations": [
+              {
+                "name": "SummarizationSetBy",
+                "value": "Automatic"
+              }
+            ]
+          },
+          {
+            "type": "calculated",
+            "name": "4_benaming",
+            "dataType": "string",
+            "isDataTypeInferred": true,
+            "expression": [
+              "",
+              "VAR maxdate =",
+              "    CALCULATE (",
+              "        MAX ( dim_tijd[Date] ),",
+              "        ALLEXCEPT ( dim_tijd, dim_tijd[3_running_total_blanks] )",
+              "    )",
+              "VAR mindate =",
+              "    CALCULATE (",
+              "        MIN ( dim_tijd[Date] ),",
+              "        ALLEXCEPT ( dim_tijd, dim_tijd[3_running_total_blanks] )",
+              "    )",
+              "VAR maxdatef =",
+              "    FORMAT ( maxdate, \"dd/mm/yyyy\" )",
+              "VAR mindatef =",
+              "    FORMAT ( mindate, \"dd/mm/yyyy\" )",
+              "VAR string = \"[\" & mindatef & \"-\" & maxdatef & \"]\"",
+              "RETURN",
+              "    string",
+              ""
+            ],
+            "sortByColumn": "3_running_total_blanks",
+            "lineageTag": "f34be32f-2e5b-401b-b1e6-549cf87217ea",
+            "summarizeBy": "none",
+            "annotations": [
+              {
+                "name": "SummarizationSetBy",
+                "value": "Automatic"
+              },
+              {
+                "name": "PBI_ChangedProperties",
+                "value": "[\"SortByColumn\"]"
+              }
+            ]
+          },
+          {
+            "type": "calculated",
+            "name": "5_benamingjaar",
+            "dataType": "string",
+            "expression": [
+              "",
+              "VAR maxdate =",
+              "    CALCULATE (",
+              "        MAX ( dim_tijd[Date] ),",
+              "        ALLEXCEPT ( dim_tijd, dim_tijd[3_running_total] )",
+              "    )",
+              "VAR maxyear = YEAR(maxdate)",
+              "VAR test = DATEVALUE(FORMAT(dim_tijd[4_benaming_start]&\"-01\",\"dd:mm:yyyy\"))+dim_tijd[input_interval]*30",
+              "VAR maxyearall = Calculate(max(dim_tijd[Date]), all(dim_tijd))",
+              "RETURN",
+              "IF(",
+              "    test>maxyearall,maxyear+1,",
+              "    maxyear)"
+            ],
+            "lineageTag": "89325a93-0f90-4ed0-900f-a899860eab81",
+            "summarizeBy": "none",
+            "annotations": [
+              {
+                "name": "SummarizationSetBy",
+                "value": "Automatic"
+              },
+              {
+                "name": "PBI_ChangedProperties",
+                "value": "[\"DataType\"]"
+              }
+            ]
+          },
+          {
+            "type": "calculated",
+            "name": "4_benaming_start",
+            "dataType": "string",
+            "isDataTypeInferred": true,
+            "expression": [
+              "",
+              "VAR mindate =",
+              "    CALCULATE (",
+              "        MIN ( dim_tijd[Date] ),",
+              "        ALLEXCEPT ( dim_tijd, dim_tijd[3_running_total] )",
+              "    )",
+              "VAR minmmyy = FORMAT(mindate, \"YY-MM\")",
+              "RETURN",
+              "minmmyy"
+            ],
+            "lineageTag": "19c5aa43-0072-4e79-aa1d-40471badf530",
+            "summarizeBy": "none",
+            "annotations": [
+              {
+                "name": "SummarizationSetBy",
+                "value": "Automatic"
+              }
+            ]
+          },
+          {
+            "type": "calculated",
+            "name": "3_running_total_blanks",
+            "dataType": "int64",
+            "isDataTypeInferred": true,
+            "expression": [
+              "",
+              "IF (",
+              "    ISBLANK ( dim_tijd[3_running_total] ),",
+              "    MIN ( dim_tijd[3_running_total] ) - 1,",
+              "    dim_tijd[3_running_total]",
+              ")"
+            ],
+            "formatString": "0",
+            "lineageTag": "f33ef602-0672-400f-97f6-e67211679a83",
+            "summarizeBy": "sum",
+            "annotations": [
+              {
+                "name": "SummarizationSetBy",
+                "value": "Automatic"
+              }
+            ]
+          },
+          {
+            "type": "calculated",
+            "name": "6_RANK",
+            "dataType": "int64",
+            "isDataTypeInferred": true,
+            "expression": [
+              "",
+              "RANKX (",
+              "    FILTER (",
+              "        dim_tijd,",
+              "        dim_tijd[5_benamingjaar] = EARLIER ( dim_tijd[5_benamingjaar] )",
+              "        // dit reset de ranking voor elk jaar, EARLIER is iets dat je enkel bij calculated columns gebruikt",
+              "    ),",
+              "    dim_tijd[3_running_total_blanks],",
+              "    ,",
+              "    ASC,",
+              "    DENSE",
+              ")"
+            ],
+            "formatString": "0",
+            "lineageTag": "d52f03d7-539d-49af-bb9d-433884c0a93b",
+            "summarizeBy": "sum",
+            "annotations": [
+              {
+                "name": "SummarizationSetBy",
+                "value": "Automatic"
+              }
+            ]
+          },
+          {
+            "type": "calculated",
+            "name": "7_periode",
+            "dataType": "string",
+            "isDataTypeInferred": true,
+            "expression": "dim_tijd[5_benamingjaar]&\"-\"&dim_tijd[6_RANK]",
+            "lineageTag": "5d6c1b0b-0ae7-455b-a63f-8ed4a7531f40",
+            "summarizeBy": "none",
+            "annotations": [
+              {
+                "name": "SummarizationSetBy",
+                "value": "Automatic"
+              }
+            ]
+          },
+          {
+            "type": "calculated",
+            "name": "yyyy-mm",
+            "dataType": "string",
+            "isDataTypeInferred": true,
+            "expression": "FORMAT(dim_tijd[Date],\"yyyy-mm\")",
+            "lineageTag": "c418be04-af47-455e-ac8f-56fa4bcd271b",
+            "summarizeBy": "none",
+            "annotations": [
+              {
+                "name": "SummarizationSetBy",
+                "value": "Automatic"
+              }
+            ]
+          }
+        ],
+        "partitions": [
+          {
+            "name": "dim_tijd-98f66a3c-09f7-4e31-bd65-45b0c7925db0",
+            "mode": "import",
+            "source": {
+              "type": "calculated",
+              "expression": [
+                "",
+                "VAR startdatum = \"01/01/2019\"",
+                "VAR einddatum = \"01/01/2022\"",
+                "RETURN",
+                "    CALENDAR (",
+                "        DATE ( YEAR ( startdatum ), 1, 1 ),",
+                "        DATE ( YEAR ( einddatum ), 12, 31 )",
+                "    )"
+              ]
+            }
+          }
+        ],
+        "measures": [
+          {
+            "name": "input_year",
+            "expression": "2021",
+            "formatString": "0",
+            "lineageTag": "6f4e6111-e0cc-4828-8b6b-9178679086db"
+          },
+          {
+            "name": "input_month",
+            "expression": "12",
+            "formatString": "0",
+            "lineageTag": "debd5715-d84c-48a5-b623-c8a8f753448b"
+          },
+          {
+            "name": "input_interval",
+            "expression": "3",
+            "formatString": "0",
+            "lineageTag": "d8737a26-87fa-4dca-a874-2c0a94e20f47"
+          }
+        ],
+        "annotations": [
+          {
+            "name": "PBI_Id",
+            "value": "ac1af2e5b70b428d8152b7b6d813f8a3"
+          }
+        ]
+      }
+    ],
+    "cultures": [
+      {
+        "name": "en-US",
+        "linguisticMetadata": {
+          "content": {
+            "Version": "1.0.0",
+            "Language": "en-US",
+            "DynamicImprovement": "HighConfidence"
+          },
+          "contentType": "json"
+        }
+      }
+    ],
+    "annotations": [
+      {
+        "name": "__PBI_TimeIntelligenceEnabled",
+        "value": "1"
+      },
+      {
+        "name": "PBIDesktopVersion",
+        "value": "2.107.683.0 (22.07)"
+      },
+      {
+        "name": "TabularEditor_SerializeOptions",
+        "value": "{\"IgnoreInferredObjects\":true,\"IgnoreInferredProperties\":true,\"IgnoreTimestamps\":true,\"SplitMultilineStrings\":true,\"PrefixFilenames\":false,\"LocalTranslations\":false,\"LocalPerspectives\":false,\"LocalRelationships\":false,\"Levels\":[\"Data Sources\",\"Shared Expressions\",\"Perspectives\",\"Relationships\",\"Roles\",\"Tables\",\"Tables/Columns\",\"Tables/Hierarchies\",\"Tables/Measures\",\"Tables/Partitions\",\"Tables/Calculation Items\",\"Translations\"]}"
+      }
+    ]
+  }
+}
