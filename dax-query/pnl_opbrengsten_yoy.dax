@@ -1,0 +1,37 @@
+// DAX Query
+DEFINE
+    VAR __DS0FilterTable4 =
+        TREATAS( { TRUE }, 'budget versie'[budgetCY?] )
+
+
+VAR __DS0Core =
+        SUMMARIZECOLUMNS(
+            'dim pnl opbrengsten'[P&L],
+            'dim pnl opbrengsten'[sort0],
+            'dim pnl opbrengsten'[P&L niv 1],
+            'dim pnl opbrengsten'[P&L niv 1 - sort],
+            'dim pnl opbrengsten'[P&L niv 12],
+            'dim pnl opbrengsten'[sort_niv2],
+            'dim pnl opbrengsten'[P&L niv 3],
+            'dim pnl opbrengsten'[sort_niv3],
+            'date'[perdiode],
+            'date'[Year],
+            'budget versie'[versie],
+            'fct pnl ramingen'[Versie raming],
+            //__DS0FilterTable4,
+            "switch_x", [switch x],
+            "show_niv3", [pag rep hier hide niv3],
+            "@test",
+                CALCULATE(
+                    [Actuals basic],
+                    TREATAS(
+                        VALUES( 'dim pnl opbrengsten'[sleutel_voor2023] ),
+                        'fct besteed'[sleutelpnl opbrengst]
+                    )
+                )
+        )
+    VAR _filternulljaar =
+        FILTER( __DS0Core, 'date'[Year] <> BLANK( ) )
+
+EVALUATE
+_filternulljaar

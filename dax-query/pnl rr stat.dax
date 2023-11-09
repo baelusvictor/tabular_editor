@@ -1,0 +1,18 @@
+// DAX Query
+DEFINE
+    VAR __DS0Core =
+        SUMMARIZECOLUMNS(
+            'rr statutair mapping'[Niveau1],
+            'rr statutair mapping'[Index],
+            'rr statutair mapping'[IsSubtotaal],
+            //"@1", FORMAT( [a pnl rr treatas], "#,0" ),
+            //"@2", FORMAT( [a pnl rr teken], "#,0" ),
+            //"@3", FORMAT( [a pnl rr ytd], "#,0" ),
+            "@4", FORMAT( [a pnl rr], "#,0" )
+        )
+
+EVALUATE
+__DS0Core
+ORDER BY
+    'rr statutair mapping'[Index],
+    'rr statutair mapping'[Niveau1]

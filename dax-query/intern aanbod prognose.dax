@@ -1,0 +1,25 @@
+DEFINE
+    VAR __DS0FilterTable = TREATAS( { 2021, 2022, 2023, 2024 }, 'dim date dbt'[year_actual] )
+    VAR __DS0FilterTable2 = TREATAS( { 202312, 202401 }, 'dim date dbt'[year_month] )
+    VAR __DS0FilterTable3 = TREATAS( { "CAM" }, 'dim kostobject niveaus'[kostobject] )
+    VAR __DS0Core =
+        SUMMARIZECOLUMNS(
+            'dim date dbt'[year_actual],
+            //'dim date dbt'[year_month],
+            'dim date dbt'[month_actual],
+            //'dim date dbt'[date_day],
+            __DS0FilterTable,
+            __DS0FilterTable2,
+            __DS0FilterTable3,
+            "werkdagen", [# aanbod intern mensen per dag],
+            "intern aanbod AVG daily", FORMAT( [intern aanbod AVG daily], "#,0.00", "nl-nl" ),
+            "intern aanbod werkelijk ", FORMAT( [intern aanbod], "#,0", "nl-nl" ),
+            "intern aanbod AVG daily P2Y", FORMAT( [_avg daily aanbod intern 2x52w terug werkplek], "#,0.00", "nl-nl" ),
+            "ziekte factor PY", FORMAT( [_%ziekte PY allexcept yyyymm invers], "#,0.00", "nl-nl" ),
+            "intern aanbod prognose ", FORMAT( [intern aanbod], "#,0", "nl-nl" )
+        )
+
+EVALUATE
+__DS0Core
+ORDER BY 'dim date dbt'[year_actual] ASC, 'dim date dbt'[month_actual] ASC
+//, 'dim date dbt'[date_day] ASC
